@@ -3,7 +3,7 @@
 `.htaccess`:
 ```apache
 <IfModule mod_rewrite.c>
-  RewriteEngine On
+    RewriteEngine On
 
     # Exclude /billing and /wordpress from these rules
     RewriteCond %{REQUEST_URI} ^/billing [OR]
@@ -24,12 +24,42 @@
     ErrorDocument 404 /404.html
   
 </IfModule>
+
+# NextJS 304 Not Modified cache fix
+FileETag None
+
+# NextJS 304 Not Modified cache fix headers
+<IfModule mod_headers.c>
+  # Unset ETag header
+  Header unset ETag
+  
+  # never cache html files
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+  
+  # Static assets
+  # <FilesMatch "\.(css|js|png|jpg|jpeg|gif|webp|svg|woff2?)$">
+  #  Header set Cache-Control "public, max-age=31536000, immutable"
+  # </FilesMatch>
+</IfModule>
+
 ```
+
+NextJS `304 Not Modified` cache fix:
+
+1. LiteSpeed was sending the same `ETag` and `Last-Modified` headers for all HTML pages (since all pages were generated at same time during NextJS build). 
+2. Cloudflare passed those headers along to the browser. Browser cached the first page visited and when visited a different page, it sent an `If-Modified-Since` or `If-None-Match` request.
+3. Server saw the timestamps matched and responded with `304 Not Modified`, telling the browser to reuse the cached content (This is wrong). This will cause the page to load plain white HTML with broken CSS.
+
+We must disable ETags and force `no-store, no-cache` on HTML files, so every page request gets fresh response.
 
 `export.sh`:
 ```sh
 #!/bin/bash
-set -e  # Exit immediately if any command fails
+set -e # Exit immediately if any command fails
 
 # cPanel Configuration
 CPANEL_HOST="192.168.8.242"
